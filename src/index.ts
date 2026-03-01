@@ -1,6 +1,6 @@
 import express from "express";
 import { z } from "zod";
-import { reconcileIdentity } from "./lib/identity";
+import { formatIdentifyResponse, reconcileIdentity } from "./lib/identity.js";
 
 const app = express();
 app.use(express.json());
@@ -63,9 +63,7 @@ app.post("/identify", validateIdentifyPayload, async (req: any, res: any) => {
     );
 
     return res.status(200).json({
-      message: "Identity reconciled",
-      input: normalizedInput,
-      reconciliation: reconciliationResult,
+      contact: await formatIdentifyResponse(reconciliationResult.primaryContactId),
     });
   } catch (error) {
     console.error("Identify failed", error);

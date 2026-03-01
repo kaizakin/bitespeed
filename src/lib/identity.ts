@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma } from "./prisma.js";
 
 type MatchedContact = {
   id: number;
@@ -18,6 +18,13 @@ type ReconcileIdentityResult = {
   mergedPrimaryIds: number[];
   createdSecondaryContactId: number | null;
   scenario: "new" | "append" | "merge" | "no_change";
+};
+
+export type IdentifyContactResponse = {
+  primaryContatctId: number;
+  emails: string[];
+  phoneNumbers: string[];
+  secondaryContactIds: number[];
 };
 
 function buildMatchFilters(
@@ -267,4 +274,77 @@ export async function reconcileIdentity(
       scenario,
     };
   });
+}
+
+export async function formatIdentifyResponse(
+  primaryContactId: number,
+): Promise<IdentifyContactResponse> {
+  const clusterContacts = await prisma.contact.findMany({
+    where: {
+      deletedAt: null,
+      OR: [{ id: primaryContactId }, { linkedId: primaryContactId }],
+    },
+    select: {
+      id: true,
+      email: true,
+      phoneNumber: true,
+      linkPrecedence: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  const primaryContact = clusterContacts.find(
+    (contact: any) => contact.id === primaryContactId,
+  );
+
+  if (!primaryContact) {
+    throw new Error(`Primary contact ${primaryContactId} not found`);
+  }
+
+  const emails: string[] = [];
+  const phoneNumbers: string[] = [];
+  const secondaryContactIds: number[] = [];
+
+  const seenEmails = new Set<string>();
+  const seenPhoneNumbers = new Set<string>();
+
+  // primary email and phone always go first (if they exist)
+  if (primaryContact.email !== null) {
+    emails.push(primaryContact.email);
+    seenEmails.add(primaryContact.email);
+  }
+
+  if (primaryContact.phoneNumber !== null) {
+    phoneNumbers.push(primaryContact.phoneNumber);
+    seenPhoneNumbers.add(primaryContact.phoneNumber);
+  }
+
+  for (const contact of clusterContacts) {
+    if (contact.id !== primaryContactId) {
+      secondaryContactIds.push(contact.id);
+    }
+
+    if (contact.email !== null && !seenEmails.has(contact.email)) {
+      emails.push(contact.email);
+      seenEmails.add(contact.email);
+    }
+
+    if (
+      contact.phoneNumber !== null &&
+      !seenPhoneNumbers.has(contact.phoneNumber)
+    ) {
+      phoneNumbers.push(contact.phoneNumber);
+      seenPhoneNumbers.add(contact.phoneNumber);
+    }
+  }
+
+  return {
+    primaryContatctId: primaryContactId,
+    emails,
+    phoneNumbers,
+    secondaryContactIds,
+  };
 }
