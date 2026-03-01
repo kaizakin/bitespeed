@@ -1,5 +1,6 @@
 import express from "express";
 import { z } from "zod";
+import { findTouchedIdentityClusters } from "./lib/identity";
 
 const app = express();
 app.use(express.json());
@@ -49,16 +50,22 @@ app.get("/health", (_req: any, res: any) => {
   res.status(200).json({ status: "ok" });
 });
 
-app.post("/identify", validateIdentifyPayload, (req: any, res: any) => {
+app.post("/identify", validateIdentifyPayload, async (req: any, res: any) => {
   const normalizedInput = {
     email: normalizeEmail(req.identifyPayload.email),
     phoneNumber: req.identifyPayload.phoneNumber ?? null,
   };
 
+  const touchedClusters = await findTouchedIdentityClusters(
+    normalizedInput.email,
+    normalizedInput.phoneNumber,
+  );
+
   // Placeholder response for initialization step.
   return res.status(501).json({
     message: "Identify reconciliation logic not implemented yet",
     input: normalizedInput,
+    touchedClusters,
   });
 });
 
