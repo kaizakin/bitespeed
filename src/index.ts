@@ -1,6 +1,6 @@
 import express from "express";
 import { z } from "zod";
-import { findTouchedIdentityClusters } from "./lib/identity";
+import { reconcileIdentity } from "./lib/identity";
 
 const app = express();
 app.use(express.json());
@@ -51,22 +51,28 @@ app.get("/health", (_req: any, res: any) => {
 });
 
 app.post("/identify", validateIdentifyPayload, async (req: any, res: any) => {
-  const normalizedInput = {
-    email: normalizeEmail(req.identifyPayload.email),
-    phoneNumber: req.identifyPayload.phoneNumber ?? null,
-  };
+  try {
+    const normalizedInput = {
+      email: normalizeEmail(req.identifyPayload.email),
+      phoneNumber: req.identifyPayload.phoneNumber ?? null,
+    };
 
-  const touchedClusters = await findTouchedIdentityClusters(
-    normalizedInput.email,
-    normalizedInput.phoneNumber,
-  );
+    const reconciliationResult = await reconcileIdentity(
+      normalizedInput.email,
+      normalizedInput.phoneNumber,
+    );
 
-  // Placeholder response for initialization step.
-  return res.status(501).json({
-    message: "Identify reconciliation logic not implemented yet",
-    input: normalizedInput,
-    touchedClusters,
-  });
+    return res.status(200).json({
+      message: "Identity reconciled",
+      input: normalizedInput,
+      reconciliation: reconciliationResult,
+    });
+  } catch (error) {
+    console.error("Identify failed", error);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
 });
 
 const port = Number(process.env.PORT ?? 3000);
